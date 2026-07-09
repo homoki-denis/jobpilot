@@ -1,3 +1,5 @@
+export const PKCE_VERIFIER_COOKIE = "insforge_pkce_verifier";
+
 type ClassValue = string | number | boolean | undefined | null | ClassValue[];
 
 export function cn(...inputs: ClassValue[]): string {

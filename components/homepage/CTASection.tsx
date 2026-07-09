@@ -3,8 +3,15 @@ import Link from "next/link";
 // 2. Internal imports
 import { buttonVariants } from "@/components/ui/button";
 
+// 3. Type definitions
+type Props = {
+  isAuthenticated: boolean;
+};
+
 // 4. Component
-export function CTASection() {
+export function CTASection({ isAuthenticated }: Props) {
+  const ctaHref = isAuthenticated ? "/dashboard" : "/login";
+
   return (
     <section className="px-6 pb-8">
       <div className="mx-auto max-w-[1440px]">
@@ -19,10 +26,10 @@ export function CTASection() {
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/login" className={buttonVariants("dark")}>
+            <Link href={ctaHref} className={buttonVariants("dark")}>
               Get Started
             </Link>
-            <Link href="/login" className={buttonVariants("secondary")}>
+            <Link href={ctaHref} className={buttonVariants("secondary")}>
               Find Your First Match
             </Link>
           </div>

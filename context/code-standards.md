@@ -34,6 +34,8 @@ The AI agent on this project operates as a senior engineer. This means:
 
 - App Router only — no Pages Router
 - React 19 — use React 19 APIs throughout
+- Middleware is called **Proxy** in Next.js 16 — the file is `proxy.ts` at the project root exporting a `proxy()` function, not `middleware.ts`/`middleware()`. Same `NextRequest`/`NextResponse`/`matcher` API otherwise.
+- `redirect()` throws internally — always call it **outside** any `try/catch` block (Server Actions and Route Handlers alike). A Server Action that always ends in a redirect (e.g. OAuth sign-in) does not need to follow the `{ success, error }` return shape below, since it never returns to the caller.
 - All components are Server Components by default
 - Only add `"use client"` when the component requires:
   - useState or useReducer
@@ -245,6 +247,7 @@ All environment variables defined in `.env.local` for development. Never hardcod
 | ------------------------------- | ---------------------- |
 | `NEXT_PUBLIC_INSFORGE_URL`      | lib/insforge-client.ts |
 | `NEXT_PUBLIC_INSFORGE_ANON_KEY` | lib/insforge-client.ts |
+| `NEXT_PUBLIC_APP_URL`           | actions/auth.ts (OAuth `redirectTo`) |
 | `BROWSERBASE_API_KEY`           | lib/browserbase.ts     |
 | `BROWSERBASE_PROJECT_ID`        | lib/browserbase.ts     |
 | `OPENAI_API_KEY`                | agent/ functions       |
@@ -305,7 +308,7 @@ Never install a new package without a clear reason. Before installing anything c
 
 Approved dependencies for this project:
 
-- `@insforge/ssr` — InsForge client
+- `@insforge/sdk` — InsForge client (SSR helpers at the `@insforge/sdk/ssr` subpath — `@insforge/ssr` is not a real package)
 - `@browserbasehq/sdk` — Browserbase sessions
 - `@browserbasehq/stagehand` — AI browser control
 - `openai` — GPT-4o API

@@ -32,45 +32,38 @@ Never rely on general training knowledge alone for library APIs — they change 
 
 ### Client vs Server
 
-Two separate instances — never mix them:
+The SSR helpers (`createBrowserClient`, `createServerClient`, `createAuthActions`, `updateSession`) live at the subpath `@insforge/sdk/ssr` — there is no separate `@insforge/ssr` package (confirmed 404 on npm). Two separate instances — never mix them:
 
 ```typescript
-// lib/insforge-client.ts — browser context only
-import { createBrowserClient } from "@insforge/ssr";
+// lib/insforge-client.ts — browser context only, read-only auth surface
+import { createBrowserClient } from "@insforge/sdk/ssr";
 
-export const insforge = createBrowserClient(
-  process.env.NEXT_PUBLIC_INSFORGE_URL!,
-  process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
-);
+export const insforge = createBrowserClient({
+  baseUrl: process.env.NEXT_PUBLIC_INSFORGE_URL!,
+  anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
+});
 ```
 
 ```typescript
 // lib/insforge-server.ts — server context only
-import { createServerClient } from "@insforge/ssr";
+import { createServerClient } from "@insforge/sdk/ssr";
 import { cookies } from "next/headers";
 
-export const createInsforgeServer = async () => {
+export async function createInsforgeServer() {
   const cookieStore = await cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_INSFORGE_URL!,
-    process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          );
-        },
-      },
+  return createServerClient({
+    baseUrl: process.env.NEXT_PUBLIC_INSFORGE_URL!,
+    anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
+    cookies: {
+      get: (name) => cookieStore.get(name)?.value,
     },
-  );
-};
+  });
+}
 ```
 
 **Rules:**
 
-- Browser client — Client Components, browser-side auth state, realtime subscriptions
+- Browser client — Client Components, browser-side auth state, realtime subscriptions. Its `auth` surface only exposes `getCurrentUser`/`getProfile`/`getPublicAuthConfig` — OAuth sign-in/sign-out are server-owned (see below).
 - Server client — Server Components, API routes, Server Actions, agent functions
 - Never use browser client in server context
 - Never use server client in browser context
@@ -79,13 +72,47 @@ export const createInsforgeServer = async () => {
 
 ### Auth
 
+OAuth mutations (`signInWithOAuth`, `exchangeOAuthCode`, `signOut`) go through `createAuthActions()` from `@insforge/sdk/ssr`, not the browser or server client directly:
+
 ```typescript
-// Get current user in server context
+// actions/auth.ts — Server Action, cookies() is read/write here
+import { cookies } from "next/headers";
+import { createAuthActions } from "@insforge/sdk/ssr";
+
+const authActions = createAuthActions({
+  baseUrl: process.env.NEXT_PUBLIC_INSFORGE_URL!,
+  anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
+  cookies: await cookies(),
+});
+
+const { data, error } = await authActions.signInWithOAuth("google", {
+  redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/callback`,
+});
+// data.codeVerifier (PKCE) must be stashed in a short-lived httpOnly cookie —
+// createAuthActions does not persist it. Retrieve it in the callback route
+// and pass it to exchangeOAuthCode(code, codeVerifier).
+```
+
+```typescript
+// app/(auth)/callback/route.ts — Route Handler, request/response cookies are separate
+const authActions = createAuthActions({
+  baseUrl: process.env.NEXT_PUBLIC_INSFORGE_URL!,
+  anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
+  requestCookies: request.cookies,
+  responseCookies: response.cookies,
+});
+await authActions.exchangeOAuthCode(code, codeVerifier);
+```
+
+`redirect()` throws internally in Next.js — always call it **outside** any `try/catch`, per Next.js's own Server Action rules.
+
+Reading the current user (Server Components, API routes, agent code):
+
+```typescript
 const insforge = await createInsforgeServer();
 const {
   data: { user },
-  error,
-} = await insforge.auth.getUser();
+} = await insforge.auth.getCurrentUser();
 if (!user) redirect("/login");
 ```
 

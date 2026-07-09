@@ -11,8 +11,12 @@ const navItems = [
   { label: "Profile", href: "/profile" },
 ];
 
+type Props = {
+  isAuthenticated: boolean;
+};
+
 // 4. Component
-export function Navbar() {
+export function Navbar({ isAuthenticated }: Props) {
   return (
     <header className="w-full bg-surface">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-6">
@@ -39,7 +43,7 @@ export function Navbar() {
           ))}
         </nav>
 
-        <Link href="/login" className={buttonVariants("dark")}>
+        <Link href={isAuthenticated ? "/dashboard" : "/login"} className={buttonVariants("dark")}>
           Start for free
         </Link>
       </div>

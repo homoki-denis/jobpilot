@@ -22,6 +22,7 @@
 ```
 /
 ├── AGENTS.md
+├── proxy.ts                                → Route protection (Next.js 16 renamed Middleware to Proxy)
 ├── context/
 │   ├── project-overview.md
 │   ├── architecture.md
@@ -39,7 +40,7 @@
 │   │   ├── login/
 │   │   │   └── page.tsx                   → Login page
 │   │   └── callback/
-│   │       └── page.tsx                   → OAuth callback handler
+│   │       └── route.ts                   → OAuth callback handler (Route Handler, not a page — must write response cookies before redirecting)
 │   ├── dashboard/
 │   │   └── page.tsx                       → Main dashboard
 │   ├── profile/
@@ -62,10 +63,11 @@
 │   ├── extractor.ts                       → GPT-4o job description extraction + structuring
 │   └── types.ts                           → Agent-specific TypeScript types
 ├── actions/
+│   ├── auth.ts                            → OAuth sign-in/sign-out Server Actions
 │   ├── profile.ts                         → Profile save + update
 │   └── jobs.ts                            → Job status updates
 ├── components/
-│   ├── ui/                                → shadcn/ui components only
+│   ├── ui/                                → shadcn/ui components, plus hand-built primitives matching project tokens (button.tsx, GoogleIcon.tsx, GitHubIcon.tsx — see progress-tracker.md)
 │   ├── layout/
 │   │   ├── Navbar.tsx
 │   │   └── Footer.tsx
@@ -293,47 +295,46 @@ Access: authenticated users only, own files only.
 - Methods: Google OAuth, GitHub OAuth
 - Protected routes: /dashboard, /profile, /find-jobs, /find-jobs/[id]
 - Public routes: /, /login
-- Middleware in middleware.ts checks session on every protected route
+- `proxy.ts` (project root) checks session on every protected route — **not** `middleware.ts`. Starting in Next.js 16, Middleware was renamed Proxy; the file convention is `proxy.ts` exporting a `proxy()` function, same `NextRequest`/`NextResponse`/`matcher` API as before.
 - On login → redirect to /dashboard
 
 ---
 
 ## InsForge Client Pattern
 
+`@insforge/ssr` does not exist as a package — the SSR helpers (`createBrowserClient`, `createServerClient`, `createAuthActions`, `updateSession`) are a subpath export of the main SDK: `@insforge/sdk/ssr`. Confirmed by installing `@insforge/sdk` and reading its shipped `.d.ts` files; `@insforge/ssr` 404s on npm.
+
 Two separate InsForge instances — never mix them:
 
 ```typescript
 // lib/insforge-client.ts
-// Browser-side — used in client components for auth state
-import { createBrowserClient } from "@insforge/ssr";
-export const insforge = createBrowserClient(
-  process.env.NEXT_PUBLIC_INSFORGE_URL!,
-  process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
-);
+// Browser-side — read-only auth state (getCurrentUser, getProfile) for client components
+import { createBrowserClient } from "@insforge/sdk/ssr";
+export const insforge = createBrowserClient({
+  baseUrl: process.env.NEXT_PUBLIC_INSFORGE_URL!,
+  anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
+});
 
 // lib/insforge-server.ts
-// Server-side — used in API routes, Server Actions, agent code
-import { createServerClient } from "@insforge/ssr";
+// Server-side — used in Server Components, API routes, Server Actions, agent code
+import { createServerClient } from "@insforge/sdk/ssr";
 import { cookies } from "next/headers";
 
-export const createInsforgeServer = async () => {
+export async function createInsforgeServer() {
   const cookieStore = await cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_INSFORGE_URL!,
-    process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          );
-        },
-      },
+  return createServerClient({
+    baseUrl: process.env.NEXT_PUBLIC_INSFORGE_URL!,
+    anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
+    cookies: {
+      get: (name) => cookieStore.get(name)?.value,
     },
-  );
-};
+  });
+}
 ```
+
+OAuth sign-in/sign-out are server-owned mutations, not browser client calls — `createBrowserClient`'s `auth` surface is intentionally restricted to `getCurrentUser`/`getProfile`/`getPublicAuthConfig`. Use `createAuthActions()` from `@insforge/sdk/ssr` inside Server Actions (`cookies: await cookies()`) or Route Handlers (`requestCookies`/`responseCookies` separately) — see `actions/auth.ts` and `app/(auth)/callback/route.ts`.
+
+`signInWithOAuth` uses PKCE and returns a `codeVerifier` that must be round-tripped through a short-lived httpOnly cookie (`PKCE_VERIFIER_COOKIE` in `lib/utils.ts`) between the sign-in Server Action and the callback Route Handler — `createAuthActions` does not persist it automatically.
 
 ---
 

@@ -7,8 +7,8 @@ Update this file after every completed feature. Any AI agent reading this should
 ## Current Status
 
 **Phase:** Phase 1 — Foundation
-**Last completed:** 01 Homepage
-**Next:** 02 Auth
+**Last completed:** 02 Auth
+**Next:** 03 PostHog Initialization
 
 ---
 
@@ -17,7 +17,7 @@ Update this file after every completed feature. Any AI agent reading this should
 ### Phase 1 — Foundation
 
 - [x] 01 Homepage
-- [ ] 02 Auth
+- [x] 02 Auth
 - [ ] 03 PostHog Initialization
 - [ ] 04 Database Schema
 
@@ -52,11 +52,20 @@ Update this file after every completed feature. Any AI agent reading this should
 
 - Homepage CTA buttons use a new `dark` Button variant (near-black, `bg-text-primary`) instead of the purple `accent` primary button defined in ui-tokens.md — the delivered `landing-page.png` design shows black CTAs on the homepage, not purple. Purple `accent` remains reserved for in-app primary actions per ui-tokens.md. See ui-registry.md → Button.
 - Hero/CTASection gradients approximate the design's pastel mesh using existing `accent-light`/`info-light`/`background` tokens (blended via `bg-gradient-to-br`), since no pink token exists in ui-tokens.md and hardcoding a new hex is against the Rules That Never Change.
-- Get Started / Start for free / Find Your First Match all link to `/login` for now — auth (Feature 02) isn't built yet, so the "redirect to /dashboard if authenticated" branch from build-plan.md doesn't apply until session state exists.
+- Get Started / Start for free / Find Your First Match now link to `/dashboard` when a session exists and `/login` otherwise — `app/page.tsx` reads `insforge.auth.getCurrentUser()` server-side via `createInsforgeServer()` and passes `isAuthenticated` down to `Navbar`, `Hero`, and `CTASection`. Originally deferred until Feature 02 (Auth) existed; wired up once it landed.
+- `@insforge/ssr` referenced throughout architecture.md/library-docs.md/code-standards.md never existed as a package (confirmed 404 on npm). The real SSR helpers (`createBrowserClient`, `createServerClient`, `createAuthActions`, `updateSession`) live at the `@insforge/sdk/ssr` subpath, discovered by installing `@insforge/sdk` and reading its shipped `.d.ts` files directly rather than trusting the docs. All three context files corrected.
+- Next.js 16 renamed Middleware to Proxy — route protection lives in `proxy.ts` at the project root (`export function proxy(request)`), not `middleware.ts`. architecture.md and code-standards.md corrected.
+- OAuth callback (`app/(auth)/callback`) is a Route Handler (`route.ts`), not a page — architecture.md originally specified `page.tsx`, but only a Route Handler/Server Action can write response cookies before redirecting; a rendering Server Component can't set cookies.
+- OAuth mutations (`signInWithOAuth`, `exchangeOAuthCode`, `signOut`) are server-owned via `createAuthActions()` — the browser client's `auth` surface intentionally excludes them (only `getCurrentUser`/`getProfile`/`getPublicAuthConfig`). Sign-in buttons on `/login` submit Server Actions (`actions/auth.ts`), not client-side SDK calls.
+- `signInWithOAuth` uses PKCE and returns a `codeVerifier` that isn't persisted automatically — stashed in a short-lived httpOnly cookie (`PKCE_VERIFIER_COOKIE`, `lib/utils.ts`) between the sign-in Server Action and the callback Route Handler.
+- The two OAuth sign-in Server Actions (`signInWithGoogle`/`signInWithGithub`) don't follow code-standards.md's `{ success, error }` return shape — they always end in `redirect()`, which throws internally and must be called outside any try/catch, so there's never a normal return value. Documented as an explicit exception in code-standards.md.
+- lucide-react ships no brand/logo icons (no GitHub icon) — built `components/ui/GoogleIcon.tsx` and `components/ui/GitHubIcon.tsx` as local inline-SVG components instead of importing icons that don't exist in the package.
+- Backend's `allowedRedirectUrls` was empty at the time of building this feature — OAuth callbacks will be rejected until `http://localhost:3000/callback` (and the prod URL later) is added via the InsForge dashboard. No MCP tool exposes writing this setting.
 
 ---
 
 ## Notes
 
+- Temporary stand-in pages: `/dashboard`, `/profile`, `/find-jobs`, `/find-jobs/[id]` are protected by `proxy.ts` and linked from the Navbar, but their real UI (Phases 2–5) isn't built yet, so visiting them after login previously 404'd. Added minimal `page.tsx` files rendering a shared `components/layout/ComingSoon.tsx` placeholder card until each page's real design/logic is implemented. Remove/replace these `page.tsx` files as each corresponding feature (05, 09, 12, 14) is actually built — do not mark those phase checkboxes done because of this stand-in.
 - Fixed a misplaced asset folder: images were nested at `public/public/` (logo.png, images/) instead of `public/`. Moved to `public/logo.png` and `public/images/*` so Next.js serves them at the expected root paths.
 - Ran `npx shadcn@latest init`, which scaffolded a "base-nova" style Button on `@base-ui/react` + `class-variance-authority` and appended a competing `@theme inline` + `:root`/`.dark` block to `app/globals.css` that shadowed the project's `--color-accent`/`--color-border` tokens with generic shadcn grayscale values, and installed several packages not on the approved dependency list in code-standards.md. Reverted `app/globals.css`, `package.json`, and `package-lock.json`, removed `components.json`, and hand-built `components/ui/button.tsx` directly against this project's own `@theme` tokens instead. `lucide-react` (already approved) was added separately and cleanly.

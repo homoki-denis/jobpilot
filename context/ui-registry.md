@@ -35,7 +35,7 @@ Base classes: `inline-flex items-center justify-center gap-2 rounded-md px-4 py-
 
 `components/layout/Navbar.tsx`
 
-Full width, `bg-surface`, inner content capped at `max-w-[1440px]`, `h-16`. Logo image (`/logo.png`, bakes in icon + wordmark) links to `/`. Nav items (Dashboard, Find Jobs, Profile) use `text-text-dark` — switch to `text-accent` for the active route once route-aware active state is wired up (not needed on the homepage itself, since none of the three items are ever active there). "Start for free" uses `buttonVariants("dark")` linking to `/login`.
+Full width, `bg-surface`, inner content capped at `max-w-[1440px]`, `h-16`. Logo image (`/logo.png`, bakes in icon + wordmark) links to `/`. Nav items (Dashboard, Find Jobs, Profile) use `text-text-dark` — switch to `text-accent` for the active route once route-aware active state is wired up (not needed on the homepage itself, since none of the three items are ever active there). "Start for free" uses `buttonVariants("dark")`, linking to `/dashboard` if `isAuthenticated` (prop, computed server-side in `app/page.tsx` via `createInsforgeServer()`) else `/login`.
 
 ### Footer
 
@@ -47,7 +47,7 @@ Full width, `bg-surface`, inner content capped at `max-w-[1440px]`, `h-16`. Logo
 
 `components/homepage/Hero.tsx`
 
-Gradient hero card: `bg-gradient-to-br from-accent-light via-background to-info-light` (token-based approximation of the design's pastel mesh gradient — no pink token exists in ui-tokens.md, so purple/blue tokens are blended instead). Headline + subhead centered, two CTAs (`dark` + `secondary` button variants). Dashboard preview screenshot (`/images/dashboard-demo.png`, browser chrome and glow already baked into the asset) sits in a `border border-border` card with `-mt-12`/`-mt-16` to overlap the gradient card above it.
+Gradient hero card: `bg-gradient-to-br from-accent-light via-background to-info-light` (token-based approximation of the design's pastel mesh gradient — no pink token exists in ui-tokens.md, so purple/blue tokens are blended instead). Headline + subhead centered, two CTAs (`dark` + `secondary` button variants), both linking to `/dashboard` if `isAuthenticated` (prop) else `/login`. Dashboard preview screenshot (`/images/dashboard-demo.png`, browser chrome and glow already baked into the asset) sits in a `border border-border` card with `-mt-12`/`-mt-16` to overlap the gradient card above it.
 
 ### Features
 
@@ -61,8 +61,38 @@ Two alternating two-column rows (`grid lg:grid-cols-2`), image side order flips 
 
 Centered single quote. "Success Stories" eyebrow label in `text-accent uppercase`. Avatar image (`/images/user-icon.png`) rendered `rounded-full`.
 
+### Login Page
+
+`app/(auth)/login/page.tsx`
+
+Centered auth card: `w-full max-w-sm rounded-2xl border border-border bg-surface p-6` with the ui-rules.md card shadow, vertically/horizontally centered in a `min-h-screen bg-background` wrapper. Logo, heading, and two OAuth buttons each rendered as `<Button variant="secondary" className="w-full gap-2">` inside a `<form action={signInWithGoogle|signInWithGithub}>` (Server Actions, not client handlers). Error banner (`?error=` search param) uses `bg-error/10 text-error`.
+
+`components/ui/GoogleIcon.tsx` / `components/ui/GitHubIcon.tsx` — local inline-SVG brand marks. lucide-react ships no brand/logo icons, so these aren't sourced from the icon library; Google's mark keeps its official 4-color brand palette hardcoded in the SVG paths (not Tailwind classes) since that's a fixed brand asset, not a themeable design-system color.
+
+### ComingSoon
+
+`components/layout/ComingSoon.tsx`
+Last updated: 2026-07-09
+
+Temporary placeholder for routes not built yet (`/dashboard`, `/profile`, `/find-jobs`, `/find-jobs/[id]` — see Notes in progress-tracker.md). Centered card, same shape as the Login page card: `w-full max-w-sm rounded-2xl border border-border bg-surface p-6` with the ui-rules.md card shadow, centered in a `min-h-screen bg-background` wrapper.
+
+| Property         | Class                                                             |
+| ---------------- | ------------------------------------------------------------------ |
+| Page background  | `bg-background` (`main`, `min-h-screen`, centered flex)            |
+| Card background  | `bg-surface`                                                       |
+| Card border      | `border border-border`                                             |
+| Card radius      | `rounded-2xl`                                                      |
+| Card shadow      | `shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]` (ui-rules.md card shadow — same arbitrary value as Login page card) |
+| Card padding     | `p-6`, `text-center`                                               |
+| Title (h1)       | `text-base font-semibold text-text-primary`                        |
+| Body text        | `mt-1 text-xs text-text-muted`                                     |
+| CTA              | `mt-6`, `buttonVariants("secondary")` on a `Link` back to `/`      |
+| Accent usage     | none                                                                |
+
+**Pattern notes:** No Navbar/Footer — intentionally distinct from real pages so it reads as a stand-in, not a finished page. Title/body text sizing matches ui-rules.md's Empty State pattern (short muted description + one CTA), not the Section Heading/Body Text hierarchy used on real content pages. Takes a `title` prop only. Delete each usage once its real page is built (see progress-tracker.md Notes for the phase → route mapping).
+
 ### CTASection
 
 `components/homepage/CTASection.tsx`
 
-Same gradient-card pattern as Hero (reversed gradient direction: `from-info-light ... to-accent-light`), same two CTA buttons. Bottom-of-page conversion banner before the Footer.
+Same gradient-card pattern as Hero (reversed gradient direction: `from-info-light ... to-accent-light`), same two CTA buttons, same `isAuthenticated` prop → `/dashboard`/`/login` link logic as Hero. Bottom-of-page conversion banner before the Footer.
